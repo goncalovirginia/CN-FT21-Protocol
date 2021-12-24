@@ -8,9 +8,8 @@ public class TracingPacket extends Packet {
 	/**
 	 * <code>ApplicationPacket</code> constructor. Calls the super class and sets
 	 * the type to DATA.
-	 * 
-	 * @param s  source address
-	 * @param d  destination address
+	 * @param s source address
+	 * @param d destination address
 	 * @param pl initial payload
 	 */
 	TracingPacket(int src, int dst, byte[] pl) {

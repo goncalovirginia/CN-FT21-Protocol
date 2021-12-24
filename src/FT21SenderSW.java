@@ -1,6 +1,7 @@
 
 import java.io.File;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 
 import cnss.simulator.Node;
 import ft21.FT21AbstractSenderApplication;
@@ -61,7 +62,7 @@ public class FT21SenderSW extends FT21AbstractSenderApplication {
 			super.sendPacket(now, RECEIVER, new FT21_UploadPacket(file.getName()));
 			break;
 		case UPLOADING:
-			super.sendPacket(now, RECEIVER, readDataPacket(file, nextPacketSeqN));
+			super.sendPacket(now, RECEIVER, readDataPacket(file, nextPacketSeqN, now));
 			break;
 		case FINISHING:
 			super.sendPacket(now, RECEIVER, new FT21_FinPacket(nextPacketSeqN));
@@ -92,15 +93,18 @@ public class FT21SenderSW extends FT21AbstractSenderApplication {
 		}
 	}
 
-	private FT21_DataPacket readDataPacket(File file, int seqN) {
+	private FT21_DataPacket readDataPacket(File file, int seqN, int now) {
 		try {
 			if (raf == null)
 				raf = new RandomAccessFile(file, "r");
-
+			
+			byte[] optionalData = ByteBuffer.allocate(4).putInt(now).array();
+			
 			raf.seek(BlockSize * (seqN - 1));
 			byte[] data = new byte[BlockSize];
 			int nbytes = raf.read(data);
-			return new FT21_DataPacket(seqN, data, nbytes);
+			
+			return new FT21_DataPacket(seqN, (byte) optionalData.length, optionalData, data, nbytes);
 		} catch (Exception x) {
 			throw new Error("Fatal Error: " + x.getMessage());
 		}

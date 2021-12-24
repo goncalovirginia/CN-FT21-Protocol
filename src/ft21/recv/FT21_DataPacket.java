@@ -2,6 +2,8 @@ package ft21.recv;
 
 import ft21.FT21Packet;
 
+import java.nio.ByteBuffer;
+
 class FT21_DataPacket extends FT21Packet {
 	public final int seqN;
 	public final byte[] data;
