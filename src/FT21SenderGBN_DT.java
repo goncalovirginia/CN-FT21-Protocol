@@ -7,9 +7,10 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class FT21SenderGBN extends FT21AbstractSenderApplication {
+public class FT21SenderGBN_DT extends FT21AbstractSenderApplication {
 
-	private static final int TIMEOUT = 1000;
+	private static final int INITIAL_TIMEOUT = 1000;
+	private int timeout;
 
 	static int RECEIVER = 1;
 
@@ -33,7 +34,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 	
 	private int windowStartSeqN;
 
-	public FT21SenderGBN() {
+	public FT21SenderGBN_DT() {
 		super(true, "FT21SenderGBN");
 	}
 
@@ -56,6 +57,8 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 		packetsSendTime = new HashMap<>();
 		timeouts = new HashMap<>();
 		
+		timeout = INITIAL_TIMEOUT;
+		
 		return 1;
 	}
 
@@ -68,8 +71,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 		}
 		
 		if (canSend) {
-			self.set_timeout(TIMEOUT);
-			timeouts.put(nextPacketSeqN, now + TIMEOUT);
+			timeouts.put(nextPacketSeqN, now + timeout);
 			sendNextPacket(now);
 		}
 	}
@@ -81,7 +83,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 		
 		nextPacketSeqN = windowStartSeqN;
 		canSend = true;
-		tallyTimeout(TIMEOUT);
+		tallyTimeout(timeout);
 	}
 
 	private void sendNextPacket(int now) {
@@ -131,6 +133,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 				}
 				
 				tallyRTT(now - packetsSendTime.get(ack.cSeqN));
+				timeout = (int) (stats.rtt.getAvg() * 3);
 				
 				break;
 			case FINISHING:

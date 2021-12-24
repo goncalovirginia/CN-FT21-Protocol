@@ -73,6 +73,10 @@ public class FT21Stats {
 			sum += val;
 			tot++;
 		}
+		
+		public double getAvg() {
+			return sum/(double)tot;
+		}
 
 		public String toString() {
 			if( tot > 0 )

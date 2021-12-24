@@ -9,7 +9,7 @@ abstract public class FT21AbstractSenderApplication extends AbstractApplicationA
 
 	private static final String TRAFFIC = "bytes";
 
-	FT21Stats stats;
+	public FT21Stats stats;
 
 	protected FT21AbstractSenderApplication(boolean logOn, String name) {
 		super(logOn, name);
