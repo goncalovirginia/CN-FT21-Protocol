@@ -82,16 +82,9 @@ public class FT21SenderSR extends FT21AbstractSenderApplication {
 	}
 	
 	private boolean checkTimeout(int now) {
-		/*
-		System.out.println("active timeouts:");
-		System.out.println(timeoutsSeqNAsKey.keySet());
-		System.out.println(timeoutsSeqNAsKey.values());
-		System.out.println(timeoutsTimeAsKey.keySet());*/
 		if (!timeoutsSeqNAsKey.containsValue(now)) {
 			return false;
 		}
-		
-		//System.out.println("timeout at " + now + " for seqN " + timeoutsTimeAsKey.get(now));
 		
 		int temp = nextPacketSeqN;
 		nextPacketSeqN = timeoutsTimeAsKey.get(now);
@@ -125,8 +118,8 @@ public class FT21SenderSR extends FT21AbstractSenderApplication {
 
 	@Override
 	public void on_receive_ack(int now, int client, FT21_AckPacket ack) {
-		if (timeoutsSeqNAsKey.containsKey(ack.cSeqN) && timeoutsSeqNAsKey.get(ack.cSeqN) > ack.timeStamp) {
-			tallyTimeout(now - ack.timeStamp);
+		if (timeoutsSeqNAsKey.containsKey(ack.cSeqN) && timeoutsSeqNAsKey.get(ack.cSeqN) > now) {
+			tallyTimeout(timeoutsSeqNAsKey.get(ack.cSeqN) - now);
 			timeoutsTimeAsKey.remove(timeoutsSeqNAsKey.remove(ack.cSeqN));
 		}
 		
