@@ -103,7 +103,7 @@ public class FT21SenderGBN extends FT21AbstractSenderApplication {
 
 	@Override
 	public void on_receive_ack(int now, int client, FT21_AckPacket ack) {
-		if (timeouts.containsValue(ack.cSeqN) && timeouts.get(ack.cSeqN) > ack.timeStamp) {
+		if (timeouts.containsKey(ack.cSeqN) && timeouts.get(ack.cSeqN) > ack.timeStamp) {
 			tallyTimeout(now - ack.timeStamp);
 			timeouts.remove(ack.cSeqN);
 		}

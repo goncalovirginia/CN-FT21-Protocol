@@ -5,12 +5,13 @@ import java.io.File;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
-public class FT21SenderGBN_DT extends FT21AbstractSenderApplication {
+public class FT21SenderSR extends FT21AbstractSenderApplication {
 
-	private static final int INITIAL_TIMEOUT = 1000;
-	private int timeout;
+	private static final int TIMEOUT = 1000;
 
 	static int RECEIVER = 1;
 
@@ -26,7 +27,10 @@ public class FT21SenderGBN_DT extends FT21AbstractSenderApplication {
 	
 	private Map<Integer, Integer> packetsSendTime;
 	
-	private Map<Integer, Integer> timeouts;
+	private Map<Integer, Integer> timeoutsSeqNAsKey;
+	private Map<Integer, Integer> timeoutsTimeAsKey;
+	
+	private Set<Integer> ackedPackets;
 	
 	private boolean canSend;
 
@@ -34,8 +38,8 @@ public class FT21SenderGBN_DT extends FT21AbstractSenderApplication {
 	
 	private int windowStartSeqN;
 
-	public FT21SenderGBN_DT() {
-		super(true, "FT21SenderGBN_DT");
+	public FT21SenderSR() {
+		super(true, "FT21SenderSR");
 	}
 
 	@Override
@@ -55,39 +59,55 @@ public class FT21SenderGBN_DT extends FT21AbstractSenderApplication {
 		windowStartSeqN = 1;
 		
 		packetsSendTime = new HashMap<>();
-		timeouts = new HashMap<>();
-		
-		timeout = INITIAL_TIMEOUT;
+		timeoutsSeqNAsKey = new HashMap<>();
+		timeoutsTimeAsKey = new HashMap<>();
+		ackedPackets = new HashSet<>();
 		
 		return 1;
 	}
 
 	@Override
 	public void on_clock_tick(int now) {
-		checkTimeout(now);
+		if (checkTimeout(now)) {
+			return;
+		}
 		
 		if (nextPacketSeqN == windowStartSeqN + windowSize || nextPacketSeqN > lastPacketSeqN) {
 			canSend = false;
 		}
 		
 		if (canSend) {
-			timeouts.put(nextPacketSeqN, now + timeout);
 			sendNextPacket(now);
 		}
 	}
 	
-	public void checkTimeout(int now) {
-		if (!timeouts.containsValue(now)) {
-			return;
+	private boolean checkTimeout(int now) {
+		/*
+		System.out.println("active timeouts:");
+		System.out.println(timeoutsSeqNAsKey.keySet());
+		System.out.println(timeoutsSeqNAsKey.values());
+		System.out.println(timeoutsTimeAsKey.keySet());*/
+		if (!timeoutsSeqNAsKey.containsValue(now)) {
+			return false;
 		}
 		
-		nextPacketSeqN = windowStartSeqN;
-		canSend = true;
-		tallyTimeout(timeout);
+		//System.out.println("timeout at " + now + " for seqN " + timeoutsTimeAsKey.get(now));
+		
+		int temp = nextPacketSeqN;
+		nextPacketSeqN = timeoutsTimeAsKey.get(now);
+		sendNextPacket(now);
+		nextPacketSeqN = temp;
+		
+		tallyTimeout(TIMEOUT);
+		
+		return true;
 	}
 
 	private void sendNextPacket(int now) {
 		packetsSendTime.put(nextPacketSeqN, now);
+		timeoutsSeqNAsKey.put(nextPacketSeqN, now + TIMEOUT);
+		timeoutsTimeAsKey.put(now + TIMEOUT, nextPacketSeqN);
+		
 		switch (state) {
 			case BEGINNING:
 				super.sendPacket(now, RECEIVER, new FT21_UploadPacket(file.getName()));
@@ -105,9 +125,9 @@ public class FT21SenderGBN_DT extends FT21AbstractSenderApplication {
 
 	@Override
 	public void on_receive_ack(int now, int client, FT21_AckPacket ack) {
-		if (timeouts.containsKey(ack.cSeqN) && timeouts.get(ack.cSeqN) > ack.timeStamp) {
+		if (timeoutsSeqNAsKey.containsKey(ack.cSeqN) && timeoutsSeqNAsKey.get(ack.cSeqN) > ack.timeStamp) {
 			tallyTimeout(now - ack.timeStamp);
-			timeouts.remove(ack.cSeqN);
+			timeoutsTimeAsKey.remove(timeoutsSeqNAsKey.remove(ack.cSeqN));
 		}
 		
 		switch (state) {
@@ -116,15 +136,26 @@ public class FT21SenderGBN_DT extends FT21AbstractSenderApplication {
 				nextPacketSeqN++;
 				break;
 			case UPLOADING:
-				if (ack.cSeqN < windowStartSeqN && ack.timeStamp < packetsSendTime.get(ack.cSeqN + 1)) {
+				if (ack.cSeqN == 0) {
 					return;
 				}
 				
 				if (ack.cSeqN < windowStartSeqN) {
-					nextPacketSeqN = windowStartSeqN;
+					if (ack.timeStamp < packetsSendTime.get(ack.cSeqN + 1)) {
+						break;
+					}
+					int temp = nextPacketSeqN;
+					nextPacketSeqN = ack.cSeqN + 1;
+					sendNextPacket(now);
+					nextPacketSeqN = temp;
+					break;
 				}
-				else {
-					windowStartSeqN = ack.cSeqN + 1;
+				
+				ackedPackets.add(ack.cSeqN);
+				
+				while (windowStartSeqN <= ack.cSeqN) {
+					timeoutsTimeAsKey.remove(timeoutsSeqNAsKey.remove(windowStartSeqN));
+					windowStartSeqN++;
 				}
 				
 				if (windowStartSeqN > lastPacketSeqN) {
@@ -133,7 +164,6 @@ public class FT21SenderGBN_DT extends FT21AbstractSenderApplication {
 				}
 				
 				tallyRTT(now - packetsSendTime.get(ack.cSeqN));
-				timeout = (int) (stats.rtt.getAvg() * 3);
 				
 				break;
 			case FINISHING:
